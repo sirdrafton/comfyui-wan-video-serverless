@@ -13,12 +13,12 @@ import subprocess
 import urllib.request
 import urllib.error
 
-sys.path.insert(0, '/workspace/ComfyUI')
+sys.path.insert(0, '/comfyui')
 
-COMFYUI_DIR = "/workspace/ComfyUI"
+COMFYUI_DIR = "/comfyui"
 INPUT_DIR = f"{COMFYUI_DIR}/input"
 OUTPUT_DIR = f"{COMFYUI_DIR}/output"
-WORKFLOW_PATH = "/workspace/workflow.json"
+WORKFLOW_PATH = "/workflow.json"
 
 comfy_process = None
 
