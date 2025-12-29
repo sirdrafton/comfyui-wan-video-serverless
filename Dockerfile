@@ -1,59 +1,49 @@
-# ComfyUI WAN 2.2 Video Serverless Endpoint
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
-
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    python3.10-venv \
     git \
     wget \
     curl \
+    unzip \
     ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace
+# Set python3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+RUN update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Install PyTorch with CUDA 12.1
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Clone ComfyUI
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui
+WORKDIR /comfyui
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install ComfyUI dependencies
-RUN pip install --no-cache-dir \
-    torch \
-    torchvision \
-    torchaudio \
-    xformers \
-    accelerate \
-    transformers \
-    safetensors \
-    aiohttp \
-    einops \
-    kornia \
-    opencv-python \
-    pillow \
-    scipy \
-    tqdm \
-    runpod
+# Install RunPod SDK
+RUN pip install --no-cache-dir runpod
 
-RUN pip install --no-cache-dir -r /workspace/ComfyUI/requirements.txt
+# Create directories
+RUN mkdir -p models/diffusion_models models/text_encoders models/vae models/loras models/clip_vision input output
 
-# Create model directories
-RUN mkdir -p /workspace/ComfyUI/models/diffusion_models \
-    && mkdir -p /workspace/ComfyUI/models/text_encoders \
-    && mkdir -p /workspace/ComfyUI/models/vae \
-    && mkdir -p /workspace/ComfyUI/models/clip_vision \
-    && mkdir -p /workspace/ComfyUI/models/loras \
-    && mkdir -p /workspace/ComfyUI/input \
-    && mkdir -p /workspace/ComfyUI/output
+# Copy handler and start script
+COPY handler.py /handler.py
+COPY start.sh /start.sh
+COPY workflow.json /workflow.json
+RUN chmod +x /start.sh
 
-COPY handler.py /workspace/handler.py
-COPY start.sh /workspace/start.sh
-COPY workflow.json /workspace/workflow.json
-
-RUN chmod +x /workspace/start.sh
-
+WORKDIR /
 EXPOSE 8188
-
-CMD ["/workspace/start.sh"]
+CMD ["/start.sh"]
