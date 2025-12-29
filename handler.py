@@ -12,6 +12,7 @@ import time
 import subprocess
 import urllib.request
 import urllib.error
+import random
 
 sys.path.insert(0, '/comfyui')
 
@@ -74,11 +75,14 @@ def modify_workflow(workflow, params):
         workflow["98"]["inputs"]["height"] = params["height"]
     if "length" in params:
         workflow["98"]["inputs"]["length"] = params["length"]
-    if "seed" in params:
-        workflow["86"]["inputs"]["noise_seed"] = params["seed"]
-    else:
-        import random
-        workflow["86"]["inputs"]["noise_seed"] = random.randint(0, 2**53)
+    
+    # Handle seed - generate random if not provided or None
+    seed = params.get("seed")
+    if seed is None:
+        seed = random.randint(0, 2**53)
+    workflow["86"]["inputs"]["noise_seed"] = seed
+    params["seed"] = seed  # Store for return value
+    
     if "steps" in params:
         workflow["85"]["inputs"]["steps"] = params["steps"]
         workflow["86"]["inputs"]["steps"] = params["steps"]
@@ -180,7 +184,7 @@ def handler(job):
         
         return {
             "video": video_base64,
-            "seed": workflow["86"]["inputs"]["noise_seed"],
+            "seed": params["seed"],
             "parameters": params
         }
         
