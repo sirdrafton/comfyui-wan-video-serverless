@@ -128,16 +128,49 @@ def wait_for_completion(prompt_id, timeout=600):
 
 def get_video_output(history):
     outputs = history.get("outputs", {})
+    
+    # Debug: log what we got
+    print(f"History outputs: {json.dumps(outputs, indent=2)}")
+    
+    # List all files in output directory
+    print(f"Files in {OUTPUT_DIR}:")
+    for root, dirs, files in os.walk(OUTPUT_DIR):
+        for f in files:
+            print(f"  {os.path.join(root, f)}")
+    
+    # Try to find video in outputs
     for node_id, node_output in outputs.items():
+        print(f"Node {node_id}: {node_output.keys()}")
         if "videos" in node_output:
             for video in node_output["videos"]:
                 video_path = os.path.join(OUTPUT_DIR, video.get("subfolder", ""), video["filename"])
+                print(f"Looking for video at: {video_path}")
                 if os.path.exists(video_path):
                     with open(video_path, "rb") as f:
                         video_base64 = base64.b64encode(f.read()).decode('utf-8')
                     os.remove(video_path)
                     return video_base64
-    raise FileNotFoundError("No video output found")
+        # Also check for gifs or images that might be the output
+        if "gifs" in node_output:
+            for gif in node_output["gifs"]:
+                gif_path = os.path.join(OUTPUT_DIR, gif.get("subfolder", ""), gif["filename"])
+                print(f"Looking for gif at: {gif_path}")
+                if os.path.exists(gif_path):
+                    with open(gif_path, "rb") as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+    
+    # If still not found, try to find any video file in output
+    for root, dirs, files in os.walk(OUTPUT_DIR):
+        for f in files:
+            if f.endswith(('.mp4', '.webm', '.gif')):
+                video_path = os.path.join(root, f)
+                print(f"Found video file: {video_path}")
+                with open(video_path, "rb") as vf:
+                    video_base64 = base64.b64encode(vf.read()).decode('utf-8')
+                os.remove(video_path)
+                return video_base64
+    
+    raise FileNotFoundError(f"No video output found. Outputs: {outputs}")
 
 def handler(job):
     job_input = job.get("input", {})
