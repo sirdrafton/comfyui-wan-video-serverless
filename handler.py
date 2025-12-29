@@ -96,9 +96,13 @@ def queue_prompt(workflow):
         data=data,
         headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req) as response:
-        result = json.loads(response.read().decode('utf-8'))
-        return result["prompt_id"]
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result["prompt_id"]
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        raise RuntimeError(f"ComfyUI rejected workflow: {error_body}")
 
 def get_history(prompt_id):
     req = urllib.request.Request(f"http://127.0.0.1:8188/history/{prompt_id}")
