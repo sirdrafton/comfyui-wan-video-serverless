@@ -39,20 +39,20 @@ RUN pip install --no-cache-dir runpod huggingface_hub
 # Create model directories
 RUN mkdir -p models/checkpoints \
     models/text_encoders \
+    models/diffusion_models \
     models/vae \
     models/loras \
-    models/latent_upscale_models \
     input \
     output \
     workflows
 
-# Install LTX-Video custom nodes
+# Install ComfyUI-NAG (provides KSamplerWithNAG node)
 WORKDIR /comfyui/custom_nodes
-RUN git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
-    cd ComfyUI-LTXVideo && \
+RUN git clone https://github.com/ChenDarYen/ComfyUI-NAG.git && \
+    cd ComfyUI-NAG && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# Install VideoHelperSuite for video handling and audio upload
+# Install VideoHelperSuite for video handling
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     cd ComfyUI-VideoHelperSuite && \
     pip install --no-cache-dir -r requirements.txt || true
@@ -70,15 +70,14 @@ RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
 # CRITICAL: Reinstall PyTorch to fix any CUDA version conflicts from custom nodes
 RUN pip install --no-cache-dir --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# Copy handler, workflows, and start script
+# Copy handler, workflow, and start script
 COPY handler.py /handler.py
 COPY start.sh /start.sh
-COPY workflow_generated_audio.json /workflow_generated_audio.json
-COPY workflow_custom_audio.json /workflow_custom_audio.json
+COPY wan2_workflow.json /wan2_workflow.json
 RUN chmod +x /start.sh
 
 # Create symlink for backwards compatibility
-RUN ln -sf /workflow_generated_audio.json /workflow.json
+RUN ln -sf /wan2_workflow.json /workflow.json
 
 WORKDIR /
 EXPOSE 8188

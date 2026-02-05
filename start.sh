@@ -1,28 +1,28 @@
 #!/bin/bash
 set -e
 echo "=========================================="
-echo "Starting ComfyUI LTX-2 Video Worker"
+echo "Starting ComfyUI WAN 2.2 Video Worker"
 echo "=========================================="
 
 download_file() {
     local url=$1
     local dest=$2
-    
+
     if [ -f "$dest" ]; then
         local size=$(du -h "$dest" | cut -f1)
         echo "✓ Already exists: $(basename $dest) ($size)"
         return 0
     fi
-    
+
     echo "  Downloading: $(basename $dest)"
     mkdir -p "$(dirname "$dest")"
-    
+
     if curl -L --fail --progress-bar --max-time 3600 -o "$dest" "$url"; then
         local size=$(du -h "$dest" | cut -f1)
         echo "  ✓ Downloaded: $(basename $dest) ($size)"
         return 0
     fi
-    
+
     echo "  ✗ FAILED: $(basename $dest)"
     return 1
 }
@@ -32,33 +32,47 @@ echo "=========================================="
 echo "Downloading Models..."
 echo "=========================================="
 
-# 1. LTX-2 Checkpoint (25GB)
+# 1. CLIP/Text Encoder (~6.7 GB)
 echo ""
-echo "[1/4] LTX-2 Checkpoint"
+echo "[1/6] CLIP Text Encoder (UMT5-XXL)"
 download_file \
-    "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-dev-fp8.safetensors" \
-    "/comfyui/models/checkpoints/ltx-2-19b-dev-fp8.safetensors"
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
+    "/comfyui/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 
-# 2. Gemma Text Encoder (23GB) - From Comfy-Org (pre-merged, no auth needed)
+# 2. UNET High Noise (~15 GB)
 echo ""
-echo "[2/4] Gemma Text Encoder"
+echo "[2/6] UNET High Noise (14B fp8)"
 download_file \
-    "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors" \
-    "/comfyui/models/text_encoders/gemma_3_12B_it.safetensors"
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" \
+    "/comfyui/models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
 
-# 3. Spatial Upscaler (950MB)
+# 3. UNET Low Noise (~15 GB)
 echo ""
-echo "[3/4] Spatial Upscaler"
+echo "[3/6] UNET Low Noise (14B fp8)"
 download_file \
-    "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
-    "/comfyui/models/latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors"
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" \
+    "/comfyui/models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
 
-# 4. Distilled LoRA (7.15GB)
+# 4. VAE (~254 MB)
 echo ""
-echo "[4/4] Distilled LoRA"
+echo "[4/6] VAE"
 download_file \
-    "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors" \
-    "/comfyui/models/loras/ltx-2-19b-distilled-lora-384.safetensors"
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
+    "/comfyui/models/vae/wan_2.1_vae.safetensors"
+
+# 5. LoRA High Noise (~1.2 GB)
+echo ""
+echo "[5/6] LightX2V LoRA High Noise"
+download_file \
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors" \
+    "/comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+
+# 6. LoRA Low Noise (~1.2 GB)
+echo ""
+echo "[6/6] LightX2V LoRA Low Noise"
+download_file \
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors" \
+    "/comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
 
 echo ""
 echo "=========================================="
@@ -66,10 +80,12 @@ echo "Verifying Models..."
 echo "=========================================="
 
 for f in \
-    "/comfyui/models/checkpoints/ltx-2-19b-dev-fp8.safetensors" \
-    "/comfyui/models/text_encoders/gemma_3_12B_it.safetensors" \
-    "/comfyui/models/latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
-    "/comfyui/models/loras/ltx-2-19b-distilled-lora-384.safetensors"
+    "/comfyui/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
+    "/comfyui/models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" \
+    "/comfyui/models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" \
+    "/comfyui/models/vae/wan_2.1_vae.safetensors" \
+    "/comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors" \
+    "/comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
 do
     if [ -f "$f" ]; then
         size=$(du -h "$f" | cut -f1)

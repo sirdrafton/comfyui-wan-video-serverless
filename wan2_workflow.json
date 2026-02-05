@@ -1,0 +1,324 @@
+{
+  "84": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "85": {
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 297725978732841,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 2,
+      "end_at_step": 4,
+      "return_with_leftover_noise": "disable",
+      "latent_image": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced)"
+    }
+  },
+  "86": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 254521417272421,
+      "steps": 4,
+      "cfg": 3.6,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable"
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced)"
+    }
+  },
+  "87": {
+    "inputs": {
+      "samples": [
+        "114",
+        0
+      ],
+      "vae": [
+        "90",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "89": {
+    "inputs": {
+      "text": "talking, speaking, open mouth, mouth movement, lip movement, jaw movement, lip sync, animated mouth, lip flap, moving lips",
+      "clip": [
+        "84",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "90": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "93": {
+    "inputs": {
+      "text": "Animated cartoon men at casino poker table, mouths closed, lips sealed throughout. The standing man in black pinstripe suit has a wide happy grin with closed mouth, eyes squinting with joy, raises both arms triumphantly pumping fists in celebration. The man on the left in red hawaiian shirt looks angry and frustrated, furrowed brows, clenched jaw, mouth closed in a tight frown, slumps shoulders in defeat. Chips scattered on green felt table, poker chips and cards shift slightly, warm overhead casino lighting flickers gently, medium speed, static camera, smooth animation",
+      "clip": [
+        "84",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "94": {
+    "inputs": {
+      "fps": 16,
+      "images": [
+        "87",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "95": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "96": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "97": {
+    "inputs": {
+      "image": "ep1_scene4_1.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "98": {
+    "inputs": {
+      "width": 720,
+      "height": 720,
+      "length": 81,
+      "batch_size": 1,
+      "positive": [
+        "93",
+        0
+      ],
+      "negative": [
+        "89",
+        0
+      ],
+      "vae": [
+        "90",
+        0
+      ],
+      "start_image": [
+        "97",
+        0
+      ]
+    },
+    "class_type": "WanImageToVideo",
+    "_meta": {
+      "title": "WanImageToVideo"
+    }
+  },
+  "101": {
+    "inputs": {
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "strength_model": 1,
+      "model": [
+        "95",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "102": {
+    "inputs": {
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "strength_model": 1,
+      "model": [
+        "96",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "103": {
+    "inputs": {
+      "shift": 5,
+      "model": [
+        "102",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "104": {
+    "inputs": {
+      "shift": 5,
+      "model": [
+        "101",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "108": {
+    "inputs": {
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video-preview": "",
+      "video": [
+        "94",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "113": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 213363545305545,
+      "steps": 4,
+      "cfg": 1,
+      "nag_scale": 10,
+      "nag_tau": 2.5,
+      "nag_alpha": 0.25,
+      "nag_sigma_end": 0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "104",
+        0
+      ],
+      "positive": [
+        "98",
+        0
+      ],
+      "negative": [
+        "98",
+        1
+      ],
+      "nag_negative": [
+        "89",
+        0
+      ],
+      "latent_image": [
+        "98",
+        2
+      ]
+    },
+    "class_type": "KSamplerWithNAG (Advanced)",
+    "_meta": {
+      "title": "KSamplerWithNAG (Advanced)"
+    }
+  },
+  "114": {
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 67327525811002,
+      "steps": 4,
+      "cfg": 1,
+      "nag_scale": 10,
+      "nag_tau": 2.5,
+      "nag_alpha": 0.25,
+      "nag_sigma_end": 0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 2,
+      "end_at_step": 4,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "103",
+        0
+      ],
+      "positive": [
+        "98",
+        0
+      ],
+      "negative": [
+        "98",
+        1
+      ],
+      "nag_negative": [
+        "89",
+        0
+      ],
+      "latent_image": [
+        "113",
+        0
+      ]
+    },
+    "class_type": "KSamplerWithNAG (Advanced)",
+    "_meta": {
+      "title": "KSamplerWithNAG (Advanced)"
+    }
+  }
+}
