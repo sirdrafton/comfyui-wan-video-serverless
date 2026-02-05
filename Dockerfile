@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
@@ -25,10 +25,7 @@ RUN apt-get update && apt-get install -y \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
 RUN update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
-# Install PyTorch with CUDA 12.1
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Clone ComfyUI (requirements installed later, after custom nodes)
+# Clone ComfyUI
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui
 WORKDIR /comfyui
 
@@ -45,35 +42,31 @@ RUN mkdir -p models/checkpoints \
     output \
     workflows
 
-# Clone and install custom nodes (before ComfyUI requirements)
+# Clone and install custom nodes
 WORKDIR /comfyui/custom_nodes
 
-# ComfyUI-NAG (provides KSamplerWithNAG node)
 RUN git clone https://github.com/ChenDarYen/ComfyUI-NAG.git && \
     cd ComfyUI-NAG && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# VideoHelperSuite for video handling
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     cd ComfyUI-VideoHelperSuite && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# ComfyUI-KJNodes
 RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git && \
     cd ComfyUI-KJNodes && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# ComfyUI-Custom-Scripts (for MathExpression node)
 RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
     cd ComfyUI-Custom-Scripts && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# CRITICAL: Install ComfyUI requirements AFTER custom nodes so comfy deps take precedence
+# Install ComfyUI requirements AFTER custom nodes so comfy deps take precedence
 WORKDIR /comfyui
 RUN pip install --no-cache-dir -r requirements.txt
 
-# CRITICAL: Reinstall PyTorch last to fix any CUDA version conflicts
-RUN pip install --no-cache-dir --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# CRITICAL: PyTorch LAST — force cu124 to match the nvidia/cuda:12.4 base image
+RUN pip install --no-cache-dir --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Copy handler, workflow, and start script
 COPY handler.py /handler.py
