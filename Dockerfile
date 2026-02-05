@@ -28,10 +28,9 @@ RUN update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 # Install PyTorch with CUDA 12.1
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# Clone ComfyUI
+# Clone ComfyUI (requirements installed later, after custom nodes)
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui
 WORKDIR /comfyui
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Install RunPod SDK and additional dependencies
 RUN pip install --no-cache-dir runpod huggingface_hub
@@ -46,28 +45,34 @@ RUN mkdir -p models/checkpoints \
     output \
     workflows
 
-# Install ComfyUI-NAG (provides KSamplerWithNAG node)
+# Clone and install custom nodes (before ComfyUI requirements)
 WORKDIR /comfyui/custom_nodes
+
+# ComfyUI-NAG (provides KSamplerWithNAG node)
 RUN git clone https://github.com/ChenDarYen/ComfyUI-NAG.git && \
     cd ComfyUI-NAG && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# Install VideoHelperSuite for video handling
+# VideoHelperSuite for video handling
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     cd ComfyUI-VideoHelperSuite && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# Install ComfyUI-KJNodes
+# ComfyUI-KJNodes
 RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git && \
     cd ComfyUI-KJNodes && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# Install ComfyUI-Custom-Scripts (for MathExpression node)
+# ComfyUI-Custom-Scripts (for MathExpression node)
 RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
     cd ComfyUI-Custom-Scripts && \
     pip install --no-cache-dir -r requirements.txt || true
 
-# CRITICAL: Reinstall PyTorch to fix any CUDA version conflicts from custom nodes
+# CRITICAL: Install ComfyUI requirements AFTER custom nodes so comfy deps take precedence
+WORKDIR /comfyui
+RUN pip install --no-cache-dir -r requirements.txt
+
+# CRITICAL: Reinstall PyTorch last to fix any CUDA version conflicts
 RUN pip install --no-cache-dir --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Copy handler, workflow, and start script
