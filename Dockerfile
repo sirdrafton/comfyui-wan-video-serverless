@@ -49,6 +49,18 @@ RUN git clone https://github.com/ChenDarYen/ComfyUI-NAG.git && \
     cd ComfyUI-NAG && \
     pip install --no-cache-dir -r requirements.txt || true
 
+# Patch NAG: make Chroma import optional (fails on some ComfyUI versions where
+# comfy.ldm.chroma.layers.DoubleStreamBlock is None)
+RUN cd /comfyui/custom_nodes/ComfyUI-NAG && python3 -c "\
+with open('samplers.py') as f: c = f.read(); \
+c = c.replace(\
+  'from comfy.ldm.chroma.model import Chroma', \
+  'try:\\n    from comfy.ldm.chroma.model import Chroma\\nexcept Exception:\\n    Chroma = None'); \
+c = c.replace(\
+  'from .chroma.model import NAGChromaSwitch', \
+  'try:\\n    from .chroma.model import NAGChromaSwitch\\nexcept Exception:\\n    NAGChromaSwitch = None'); \
+open('samplers.py','w').write(c)"
+
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     cd ComfyUI-VideoHelperSuite && \
     pip install --no-cache-dir -r requirements.txt || true

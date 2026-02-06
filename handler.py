@@ -9,6 +9,7 @@ import runpod
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 import base64
 import time
 import os
@@ -242,6 +243,11 @@ def queue_prompt(workflow: Dict) -> str:
         logger.info(f"✓ Prompt queued with ID: {prompt_id}")
         return prompt_id
 
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.error(f"✗ Failed to queue prompt: {e}")
+        logger.error(f"  Response body: {body[:2000]}")
+        raise RuntimeError(f"HTTP Error {e.code}: {body[:500]}")
     except Exception as e:
         logger.error(f"✗ Failed to queue prompt: {e}")
         raise
