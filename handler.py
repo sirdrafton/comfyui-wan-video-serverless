@@ -19,6 +19,7 @@ import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any
 import random
+import socket
 
 # ============================================================================
 # LOGGING CONFIGURATION
@@ -86,6 +87,146 @@ DEFAULT_PARAMS = {
 }
 
 DEFAULT_NEGATIVE_PROMPT = "talking, speaking, open mouth, mouth movement, lip movement, jaw movement, lip sync, animated mouth, lip flap, moving lips"
+
+INFRA_FAILURE_WINDOW_SECONDS = int(os.getenv("INFRA_FAILURE_WINDOW_SECONDS", "600"))
+INFRA_FAILURE_THRESHOLD = int(os.getenv("INFRA_FAILURE_THRESHOLD", "3"))
+HARD_EXIT_ON_QUARANTINE = os.getenv("HARD_EXIT_ON_QUARANTINE", "false").lower() == "true"
+INFRA_FAILURE_TIMESTAMPS: list[float] = []
+
+INFRA_ERROR_CODES = {
+    "COMFYUI_BOOT_TIMEOUT",
+    "COMFYUI_UNREACHABLE",
+    "WORKFLOW_QUEUE_FAILED",
+    "WORKFLOW_TIMEOUT",
+    "INTERNAL_ERROR",
+}
+
+
+def _worker_metadata() -> Dict[str, Any]:
+    worker_id = (
+        os.getenv("RUNPOD_WORKER_ID")
+        or os.getenv("RUNPOD_POD_ID")
+        or os.getenv("RUNPOD_MACHINE_ID")
+    )
+    return {
+        "id": worker_id,
+        "hostname": socket.gethostname(),
+        "boot_id": os.getenv("RUNPOD_BOOT_ID"),
+    }
+
+
+def _record_infra_failure() -> int:
+    now = time.time()
+    INFRA_FAILURE_TIMESTAMPS.append(now)
+    cutoff = now - INFRA_FAILURE_WINDOW_SECONDS
+    while INFRA_FAILURE_TIMESTAMPS and INFRA_FAILURE_TIMESTAMPS[0] < cutoff:
+        INFRA_FAILURE_TIMESTAMPS.pop(0)
+    return len(INFRA_FAILURE_TIMESTAMPS)
+
+
+def _failure_response(
+    *,
+    error_code: str,
+    error_message: str,
+    retryable: bool,
+    infra_error: bool,
+    elapsed_s: float,
+    refresh_worker: bool = False,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": False,
+        "error": error_message,  # Backwards compatibility
+        "error_code": error_code,
+        "error_message": error_message,
+        "retryable": retryable,
+        "infra_error": infra_error,
+        "worker": _worker_metadata(),
+        "timings": {"elapsed_s": elapsed_s},
+        "elapsed_time": elapsed_s,  # Backwards compatibility
+    }
+    if refresh_worker:
+        payload["refresh_worker"] = True
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _infra_failure_response(
+    *,
+    error_code: str,
+    error_message: str,
+    retryable: bool,
+    elapsed_s: float,
+    refresh_worker: bool = False,
+) -> Dict[str, Any]:
+    infra_count = _record_infra_failure()
+    if infra_count >= INFRA_FAILURE_THRESHOLD:
+        quarantine = _failure_response(
+            error_code="WORKER_QUARANTINED",
+            error_message=(
+                f"Worker quarantined after {infra_count} infra failures in "
+                f"{INFRA_FAILURE_WINDOW_SECONDS}s"
+            ),
+            retryable=True,
+            infra_error=True,
+            elapsed_s=elapsed_s,
+            refresh_worker=True,
+            extra={"infra_failure_count": infra_count},
+        )
+        logger.error(quarantine["error_message"])
+        if HARD_EXIT_ON_QUARANTINE:
+            logger.error("Exiting worker process due to quarantine threshold")
+            os._exit(1)  # noqa: PLW1510
+        return quarantine
+
+    return _failure_response(
+        error_code=error_code,
+        error_message=error_message,
+        retryable=retryable,
+        infra_error=True,
+        elapsed_s=elapsed_s,
+        refresh_worker=refresh_worker,
+        extra={"infra_failure_count": infra_count},
+    )
+
+
+def _classify_exception(exc: Exception) -> tuple[str, str, bool, bool, bool]:
+    message = str(exc)
+    lowered = message.lower()
+
+    if isinstance(exc, TimeoutError):
+        return ("WORKFLOW_TIMEOUT", message, True, True, True)
+
+    if isinstance(exc, urllib.error.URLError):
+        return ("COMFYUI_UNREACHABLE", message, True, True, True)
+
+    if "workflow error" in lowered:
+        return ("WORKFLOW_EXECUTION_ERROR", message, False, False, False)
+
+    if "http error" in lowered and ("prompt" in lowered or "/prompt" in lowered):
+        return ("WORKFLOW_QUEUE_FAILED", message, True, True, True)
+
+    if "incorrect padding" in lowered or "invalid base64" in lowered:
+        return ("INVALID_INPUT", message, False, False, False)
+
+    if "missing required field" in lowered:
+        return ("INVALID_INPUT", message, False, False, False)
+
+    return ("INTERNAL_ERROR", message, True, True, True)
+
+
+def _success_response(*, video_data: str, seed: Optional[int], elapsed_s: float, extra: Dict[str, Any]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "video": video_data,
+        "seed": seed,
+        "worker": _worker_metadata(),
+        "timings": {"elapsed_s": elapsed_s},
+        "elapsed_time": elapsed_s,  # Backwards compatibility
+    }
+    payload.update(extra)
+    return payload
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -384,11 +525,23 @@ def handler(job: Dict) -> Dict:
         # Validate required fields
         if "image" not in job_input:
             logger.error("Missing required field: image")
-            return {"error": "Missing required field: image"}
+            return _failure_response(
+                error_code="INVALID_INPUT",
+                error_message="Missing required field: image",
+                retryable=False,
+                infra_error=False,
+                elapsed_s=round(time.time() - start_time, 3),
+            )
 
         if "prompt" not in job_input:
             logger.error("Missing required field: prompt")
-            return {"error": "Missing required field: prompt"}
+            return _failure_response(
+                error_code="INVALID_INPUT",
+                error_message="Missing required field: prompt",
+                retryable=False,
+                infra_error=False,
+                elapsed_s=round(time.time() - start_time, 3),
+            )
 
         # Build params
         params = {
@@ -418,7 +571,13 @@ def handler(job: Dict) -> Dict:
 
         # Wait for ComfyUI
         if not wait_for_comfyui():
-            return {"error": "ComfyUI server not available"}
+            return _infra_failure_response(
+                error_code="COMFYUI_BOOT_TIMEOUT",
+                error_message="ComfyUI server not available",
+                retryable=True,
+                elapsed_s=round(time.time() - start_time, 3),
+                refresh_worker=True,
+            )
 
         # Save input image
         save_input_image(params["image"])
@@ -435,38 +594,63 @@ def handler(job: Dict) -> Dict:
         video_data = get_output_video(outputs)
 
         if not video_data:
-            return {"error": "No video output generated"}
+            return _failure_response(
+                error_code="NO_OUTPUT_VIDEO",
+                error_message="No video output generated",
+                retryable=False,
+                infra_error=False,
+                elapsed_s=round(time.time() - start_time, 3),
+            )
 
         elapsed = time.time() - start_time
         log_section("JOB COMPLETED SUCCESSFULLY")
         logger.info(f"Total time: {elapsed:.1f}s")
 
-        return {
-            "video": video_data,
-            "seed": params["seed"],
-            "parameters": {
-                "prompt": params["prompt"],
-                "width": params["width"],
-                "height": params["height"],
-                "num_frames": params["num_frames"],
-                "steps": params["steps"],
-                "cfg": params["cfg"],
-                "fps": params["fps"],
+        return _success_response(
+            video_data=video_data,
+            seed=params["seed"],
+            elapsed_s=round(elapsed, 3),
+            extra={
+                "parameters": {
+                    "prompt": params["prompt"],
+                    "width": params["width"],
+                    "height": params["height"],
+                    "num_frames": params["num_frames"],
+                    "steps": params["steps"],
+                    "cfg": params["cfg"],
+                    "fps": params["fps"],
+                },
             },
-            "elapsed_time": elapsed,
-        }
+        )
 
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"Job failed after {elapsed:.1f}s")
-        logger.error(f"Error: {str(e)}")
-        logger.error(traceback.format_exc())
+        error_message = str(e)
+        trace = traceback.format_exc()
+        logger.error(f"Error: {error_message}")
+        logger.error(trace)
 
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "elapsed_time": elapsed,
-        }
+        error_code, classified_message, retryable, infra_error, refresh_worker = _classify_exception(e)
+        elapsed_s = round(elapsed, 3)
+
+        if infra_error or error_code in INFRA_ERROR_CODES:
+            return _infra_failure_response(
+                error_code=error_code,
+                error_message=classified_message,
+                retryable=retryable,
+                elapsed_s=elapsed_s,
+                refresh_worker=refresh_worker,
+            )
+
+        return _failure_response(
+            error_code=error_code,
+            error_message=classified_message,
+            retryable=retryable,
+            infra_error=infra_error,
+            elapsed_s=elapsed_s,
+            extra={"traceback": trace},
+        )
 
 # ============================================================================
 # ENTRY POINT
